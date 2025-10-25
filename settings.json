@@ -1,0 +1,18 @@
+{
+    "welcome": {
+        "1370753671750746132": {
+            "channel": "1431332155891650662",
+            "image": "https://cdn.discordapp.com/attachments/1370777051237191700/1431300751769993328/tropikal.png?ex=68fcea33&is=68fb98b3&hm=a1924fb05568d1e760092dedd2b12b59bde889207cdf3054a59bd29acb6d403c&",
+            "title": "Welcome to Tropikal!",
+            "description": "Hey {user}, glad to have you here \ud83c\udf34"
+        }
+    },
+    "bye": {
+        "1370753671750746132": {
+            "channel": "1431332155891650662",
+            "image": "https://cdn.discordapp.com/attachments/1370770434035023952/1431343998441881702/byebye.png?ex=68fd127a&is=68fbc0fa&hm=b84e76665ea4178a32ca77d8f892052c40de276673425bdab5870762ac6f1550&",
+            "title": "Goodbye!",
+            "description": "{user} just left us \ud83d\ude22"
+        }
+    }
+}
