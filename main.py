@@ -265,7 +265,32 @@ async def nailong(ctx):
     except Exception:
         await ctx.send("Couldn’t fetch nailong gifs right now.")
 
-# ===== BYE SETUP =====
+
+# ===== OWNER ONLY COMMANDS =====
+def owner_only():
+    async def predicate(ctx):
+        return ctx.author.id == OWNER_ID
+    return commands.check(predicate)
+
+
+@bot.command()
+@owner_only()
+async def welcome(ctx, channel_id: int = None, image_url=None, *, rest=None):
+    if not channel_id or not image_url or not rest or "|" not in rest:
+        return await ctx.send("📥 Usage: `t/welcome <channel_id> <image_url> <title> | <description>`")
+
+    title, description = [x.strip() for x in rest.split("|", 1)]
+    SETTINGS.setdefault("welcome", {})
+    SETTINGS["welcome"][str(ctx.guild.id)] = {
+        "channel": str(channel_id),
+        "image": image_url,
+        "title": title,
+        "description": description
+    }
+    save_settings(SETTINGS)
+    await ctx.send(f"✅ Welcome message has been set for <#{channel_id}>!")
+
+
 @bot.command()
 @owner_only()
 async def bye(ctx, channel_id: int = None, image_url=None, *, rest=None):
@@ -273,7 +298,6 @@ async def bye(ctx, channel_id: int = None, image_url=None, *, rest=None):
         return await ctx.send("📤 Usage: `t/bye <channel_id> <image_url> <title> | <description>`")
 
     title, description = [x.strip() for x in rest.split("|", 1)]
-
     SETTINGS.setdefault("bye", {})
     SETTINGS["bye"][str(ctx.guild.id)] = {
         "channel": str(channel_id),
@@ -285,7 +309,6 @@ async def bye(ctx, channel_id: int = None, image_url=None, *, rest=None):
     await ctx.send(f"✅ Goodbye message has been set for <#{channel_id}>!")
 
 
-# ===== VERIFY EMBED =====
 @bot.command()
 @commands.is_owner()
 async def verify(ctx, *, args=None):
@@ -294,10 +317,9 @@ async def verify(ctx, *, args=None):
             "✅ Usage: `t/verify author=<text> title=<text> desc=<text> color=<hex> image=<url> footer=<text> roleid=<id>`"
         )
 
-    import re
     pattern = r'(\w+)=(".*?"|\'.*?\'|[^\s]+)'
     matches = re.findall(pattern, args)
-    params = {k.lower(): v.strip('"\'') for k, v in matches}
+    params = {k.lower(): v.strip('"\'' ) for k, v in matches}
 
     author = params.get("author")
     title = params.get("title")
@@ -345,35 +367,26 @@ async def verify(ctx, *, args=None):
             guild = ctx.guild
             role_to_add = guild.get_role(int(role_id))
             role_to_remove = guild.get_role(remove_role_id)
-
             if role_to_add:
                 await user.add_roles(role_to_add, reason="Verified via ✅ reaction")
             if role_to_remove:
                 await user.remove_roles(role_to_remove, reason="Removed unverified role")
-
             await msg.remove_reaction("✅", user)
         except Exception as e:
             print(f"[verify cmd] Error: {e}")
             break
 
+
 @bot.command()
 @owner_only()
 async def embed(ctx, *, args=None):
-    """
-    Create a custom embed using pseudo-HTML tags.
-    Example:
-    t/embed <head>Hello</head> <body>This is a test embed.</body> <color>#ff0000</color> <footer>Footer text</footer>
-    """
     if not args:
         return await ctx.send(
-            "✅ Usage: `t/embed <head>Title</head> <body>Description</body> <color>#hex</color> <image>url</image> <footer>text</footer> <author>text</author> <thumbnail>url</thumbnail>`"
+            "✅ Usage: `t/embed <head>Title</head> <body>Description</body> <color>#hex</color> <image>url</image> <footer>text</footer>`"
         )
 
-    # Extract tags like <tag>value</tag>
     pattern = r"<(\w+)>(.*?)</\1>"
     matches = re.findall(pattern, args, re.DOTALL)
-
-    # Store in dict
     params = {k.lower(): v.strip() for k, v in matches}
 
     title = params.get("head")
@@ -384,13 +397,11 @@ async def embed(ctx, *, args=None):
     author = params.get("author")
     thumbnail = params.get("thumbnail")
 
-    # Handle color
     try:
         color_value = int(color.replace("#", ""), 16)
     except ValueError:
         color_value = 0x2b2d31
 
-    # Create embed
     embed = discord.Embed(
         title=title or discord.Embed.Empty,
         description=desc or discord.Embed.Empty,
@@ -408,52 +419,39 @@ async def embed(ctx, *, args=None):
 
     await ctx.send(embed=embed)
 
+
 # ===== WELCOME & BYE EVENTS =====
-
-
 @bot.event
 async def on_member_join(member):
     guild_id = str(member.guild.id)
     if guild_id in SETTINGS.get("welcome", {}):
-        data = SETTINGS["welcome"][guild_id]
-        channel = bot.get_channel(int(data["channel"]))
-        if not channel:
-            return
-
-        embed = discord.Embed(
-            title=data["title"],
-            description=data["description"].replace("{user}", member.mention),
-            color=discord.Color.green()
-        )
-        if data["image"]:
-            embed.set_image(url=data["image"])
-        embed.set_footer(text=f"Welcome to {member.guild.name}! 🌴")
-        await channel.send(embed=embed)
+        config = SETTINGS["welcome"][guild_id]
+        channel = bot.get_channel(int(config["channel"]))
+        if channel:
+            embed = discord.Embed(
+                title=config["title"],
+                description=config["description"].replace("{user}", member.mention),
+                color=discord.Color.green()
+            )
+            embed.set_image(url=config["image"])
+            await channel.send(embed=embed)
 
 
 @bot.event
 async def on_member_remove(member):
     guild_id = str(member.guild.id)
     if guild_id in SETTINGS.get("bye", {}):
-        data = SETTINGS["bye"][guild_id]
-        channel = bot.get_channel(int(data["channel"]))
-        if not channel:
-            return
+        config = SETTINGS["bye"][guild_id]
+        channel = bot.get_channel(int(config["channel"]))
+        if channel:
+            embed = discord.Embed(
+                title=config["title"],
+                description=config["description"].replace("{user}", member.name),
+                color=discord.Color.red()
+            )
+            embed.set_image(url=config["image"])
+            await channel.send(embed=embed)
 
-        embed = discord.Embed(
-            title=data["title"],
-            description=data["description"].replace("{user}", member.name),
-            color=discord.Color.red()
-        )
-        if data["image"]:
-            embed.set_image(url=data["image"])
-        embed.set_footer(text="We hope to see you again 💔")
-        await channel.send(embed=embed)
 
-# ===== RUN =====
+# ===== RUN BOT =====
 bot.run(DICORD_TOKEN)
-
-
-
-
-
