@@ -7,21 +7,39 @@ import datetime
 import requests
 import json
 import re
+from collections import defaultdict
 
 # ===== TOKEN =====
-# replace with your token
 DICORD_TOKEN = os.environ['discordkey']
 OWNER_ID = 1160070826276683918
 webserver.keep_alive()
+
 # ===== BOT SETUP =====
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="t/", intents=intents, help_command=None)
 AFK_USERS = {}
 
+# ===== COOLDOWN SETTINGS =====
+COMMAND_TRACKER = defaultdict(list)
+COOLDOWN_SECONDS = 15
+MAX_COMMANDS = 3
+
+
+def is_on_cooldown(user_id):
+    now = datetime.datetime.utcnow()
+    COMMAND_TRACKER[user_id] = [
+        t for t in COMMAND_TRACKER[user_id] if (now - t).total_seconds() < COOLDOWN_SECONDS
+    ]
+    if len(COMMAND_TRACKER[user_id]) >= MAX_COMMANDS:
+        first_time = COMMAND_TRACKER[user_id][0]
+        remaining = COOLDOWN_SECONDS - (now - first_time).total_seconds()
+        return True, max(1, int(remaining))
+    return False, 0
+
+
 SETTINGS_FILE = "settings.json"
+
 # ===== HELPER FUNCTIONS =====
-
-
 def load_settings():
     if not os.path.exists(SETTINGS_FILE):
         return {"welcome": {}, "bye": {}}
@@ -38,12 +56,10 @@ SETTINGS = load_settings()
 
 
 def user_tag(member: discord.Member):
-    """Format user as @Username (Nickname)"""
     return f"@{member.name} ({member.display_name})"
 
+
 # ===== ON READY =====
-
-
 @bot.event
 async def on_ready():
     await bot.change_presence(
@@ -54,9 +70,23 @@ async def on_ready():
     )
     print(f"✅ Logged in as {bot.user}")
 
+
+# ===== COOLDOWN CHECK (applies to all public commands) =====
+@bot.check
+async def global_cooldown(ctx):
+    if ctx.author.id == OWNER_ID:
+        return True  # Owner is excluded
+
+    on_cooldown, remaining = is_on_cooldown(ctx.author.id)
+    if on_cooldown:
+        await ctx.reply(f"❌ Wait! You’re on command cooldown. Please wait for `{remaining}` seconds.")
+        return False
+
+    COMMAND_TRACKER[ctx.author.id].append(datetime.datetime.utcnow())
+    return True
+
+
 # ===== PUBLIC COMMANDS =====
-
-
 @bot.command()
 async def help(ctx):
     embed = discord.Embed(
@@ -71,7 +101,7 @@ async def help(ctx):
     )
     embed.add_field(
         name="Setup Commands (Owner Only)",
-        value="`t/welcome`, `t/bye`, `t/verify, t/embed`",
+        value="`t/welcome`, `t/bye`, `t/verify`, `t/embed`",
         inline=False
     )
     embed.set_footer(text="Made by @Vyrnam for the Tropikal server 💚")
@@ -82,10 +112,7 @@ async def help(ctx):
 @bot.command()
 async def pfp(ctx, member: discord.Member = None):
     member = member or ctx.author
-    embed = discord.Embed(
-        title=f"This is {user_tag(member)}",
-        color=discord.Color.blue()
-    )
+    embed = discord.Embed(title=f"This is {user_tag(member)}", color=discord.Color.blue())
     embed.set_image(url=member.display_avatar.url)
     await ctx.send(embed=embed)
 
@@ -95,10 +122,7 @@ async def banner(ctx, member: discord.Member = None):
     member = member or ctx.author
     user = await bot.fetch_user(member.id)
     if user.banner:
-        embed = discord.Embed(
-            title=f"{user_tag(member)}",
-            color=discord.Color.blurple()
-        )
+        embed = discord.Embed(title=f"{user_tag(member)}", color=discord.Color.blurple())
         embed.set_image(url=user.banner.url)
         await ctx.send(embed=embed)
     else:
@@ -109,19 +133,13 @@ async def banner(ctx, member: discord.Member = None):
 async def info(ctx, member: discord.Member = None):
     member = member or ctx.author
     roles = [r.mention for r in member.roles if r.name != "@everyone"]
-    embed = discord.Embed(
-        title=f"👤 Info for {user_tag(member)}",
-        color=discord.Color.orange()
-    )
+    embed = discord.Embed(title=f"👤 Info for {user_tag(member)}", color=discord.Color.orange())
     embed.set_thumbnail(url=member.display_avatar.url)
     embed.add_field(name="Username", value=member.name, inline=True)
     embed.add_field(name="Nickname", value=member.display_name, inline=True)
-    embed.add_field(name="Joined Discord", value=member.created_at.strftime(
-        "%B %d, %Y"), inline=False)
-    embed.add_field(name="Joined Server",
-                    value=member.joined_at.strftime("%B %d, %Y"), inline=False)
-    embed.add_field(name="Roles", value=", ".join(
-        roles) or "None", inline=False)
+    embed.add_field(name="Joined Discord", value=member.created_at.strftime("%B %d, %Y"), inline=False)
+    embed.add_field(name="Joined Server", value=member.joined_at.strftime("%B %d, %Y"), inline=False)
+    embed.add_field(name="Roles", value=", ".join(roles) or "None", inline=False)
     await ctx.send(embed=embed)
 
 
@@ -134,12 +152,11 @@ async def serverinfo(ctx):
         color=discord.Color.gold()
     )
     embed.add_field(
-        name="Owner", value=f"@{guild.owner.name} ({guild.owner.display_name})" if guild.owner else "Unknown", inline=True)
+        name="Owner", value=f"@{guild.owner.name} ({guild.owner.display_name})" if guild.owner else "Unknown", inline=True
+    )
     embed.add_field(name="Members", value=len(guild.members), inline=True)
-    embed.add_field(
-        name="Boosts", value=guild.premium_subscription_count, inline=True)
-    embed.add_field(name="Created On", value=guild.created_at.strftime(
-        "%B %d, %Y"), inline=False)
+    embed.add_field(name="Boosts", value=guild.premium_subscription_count, inline=True)
+    embed.add_field(name="Created On", value=guild.created_at.strftime("%B %d, %Y"), inline=False)
     if guild.icon:
         embed.set_thumbnail(url=guild.icon.url)
     await ctx.send(embed=embed)
@@ -153,7 +170,7 @@ async def howgay(ctx, member: discord.Member = None):
 
 
 @bot.command()
-async def ascii(ctx, member: discord.Member = None):
+async def ascii(ctx):
     art = """
 ⠀⠀⠀⠀⠀⠀⠀⣠⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⣰⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -176,6 +193,7 @@ async def ascii(ctx, member: discord.Member = None):
 """
     await ctx.send(f"```\n{art}\n```")
 
+
 @bot.command()
 async def afk(ctx):
     user = ctx.author
@@ -190,11 +208,9 @@ async def afk(ctx):
 
 @bot.event
 async def on_message(message):
-    # Ignore bot messages
     if message.author.bot:
         return
 
-    # prevent AFK auto-remove when using the AFK command itself
     if message.content.startswith("t/afk"):
         return await bot.process_commands(message)
 
@@ -212,15 +228,15 @@ async def on_message(message):
             elapsed_str = str(elapsed).split(".")[0]
             user = await bot.fetch_user(user_id)
             await message.reply(f"💤 {user.mention} is currently AFK — AFK for `{elapsed_str}`.")
-            break  # Prevent multiple duplicate replies
+            break
 
     await bot.process_commands(message)
+
 
 @bot.command()
 async def pet(ctx):
     try:
-        res = requests.get(
-            "https://g.tenor.com/v1/search?q=cute%20pet&key=LIVDSRZULELA&limit=25")
+        res = requests.get("https://g.tenor.com/v1/search?q=cute%20pet&key=LIVDSRZULELA&limit=25")
         data = res.json()
         gif = random.choice(data["results"])["media"][0]["gif"]["url"]
         await ctx.send(gif)
@@ -231,58 +247,23 @@ async def pet(ctx):
 @bot.command()
 async def labubu(ctx):
     try:
-        res = requests.get(
-            "https://g.tenor.com/v1/search?q=labubu&key=LIVDSRZULELA&limit=25"
-        )
+        res = requests.get("https://g.tenor.com/v1/search?q=labubu&key=LIVDSRZULELA&limit=25")
         data = res.json()
         gif = random.choice(data["results"])["media"][0]["gif"]["url"]
         await ctx.send(gif)
-    except Exception as e:
+    except Exception:
         await ctx.send("Couldn’t fetch Labubu gifs right now.")
-        print(f"[Error fetching Labubu GIFs]: {e}")
 
 
 @bot.command()
 async def nailong(ctx):
     try:
-        res = requests.get(
-            "https://g.tenor.com/v1/search?q=nailong&key=LIVDSRZULELA&limit=25"
-        )
+        res = requests.get("https://g.tenor.com/v1/search?q=nailong&key=LIVDSRZULELA&limit=25")
         data = res.json()
         gif = random.choice(data["results"])["media"][0]["gif"]["url"]
         await ctx.send(gif)
-    except Exception as e:
+    except Exception:
         await ctx.send("Couldn’t fetch nailong gifs right now.")
-        print(f"[Error fetching nailong GIFs]: {e}")
-
-# ===== OWNER ONLY COMMANDS =====
-
-
-def owner_only():
-    async def predicate(ctx):
-        return ctx.author.id == OWNER_ID
-    return commands.check(predicate)
-
-
-# ===== WELCOME SETUP =====
-@bot.command()
-@owner_only()
-async def welcome(ctx, channel_id: int = None, image_url=None, *, rest=None):
-    if not channel_id or not image_url or not rest or "|" not in rest:
-        return await ctx.send("📥 Usage: `t/welcome <channel_id> <image_url> <title> | <description>`")
-
-    title, description = [x.strip() for x in rest.split("|", 1)]
-
-    SETTINGS.setdefault("welcome", {})
-    SETTINGS["welcome"][str(ctx.guild.id)] = {
-        "channel": str(channel_id),
-        "image": image_url,
-        "title": title,
-        "description": description
-    }
-    save_settings(SETTINGS)
-    await ctx.send(f"✅ Welcome message has been set for <#{channel_id}>!")
-
 
 # ===== BYE SETUP =====
 @bot.command()
@@ -471,6 +452,7 @@ async def on_member_remove(member):
 
 # ===== RUN =====
 bot.run(DICORD_TOKEN)
+
 
 
 
