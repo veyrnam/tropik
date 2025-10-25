@@ -176,7 +176,6 @@ async def ascii(ctx, member: discord.Member = None):
 """
     await ctx.send(f"```\n{art}\n```")
 
-
 @bot.command()
 async def afk(ctx):
     user = ctx.author
@@ -195,13 +194,17 @@ async def on_message(message):
     if message.author.bot:
         return
 
+    # prevent AFK auto-remove when using the AFK command itself
+    if message.content.startswith("t/afk"):
+        return await bot.process_commands(message)
+
     # remove AFK if user talks
     if message.author.id in AFK_USERS:
         del AFK_USERS[message.author.id]
         await message.channel.send(f"👋 Welcome back, {message.author.mention}! You’re no longer AFK.")
         return await bot.process_commands(message)
 
-    # notify when pinging AFK users (but not when the message is from the bot)
+    # notify when pinging AFK users
     mentioned_users = {user.id for user in message.mentions}
     for user_id in list(AFK_USERS.keys()):
         if user_id in mentioned_users:
@@ -468,6 +471,7 @@ async def on_member_remove(member):
 
 # ===== RUN =====
 bot.run(DICORD_TOKEN)
+
 
 
 
