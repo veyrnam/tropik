@@ -191,6 +191,7 @@ async def afk(ctx):
 
 @bot.event
 async def on_message(message):
+    # Ignore bot messages
     if message.author.bot:
         return
 
@@ -198,15 +199,17 @@ async def on_message(message):
     if message.author.id in AFK_USERS:
         del AFK_USERS[message.author.id]
         await message.channel.send(f"👋 Welcome back, {message.author.mention}! You’re no longer AFK.")
+        return await bot.process_commands(message)
 
-    # notify when pinging AFK users
-    for user_id, start_time in AFK_USERS.items():
-        # If the AFK user was mentioned in the message
-        if f"<@{user_id}>" in message.content or f"<@!{user_id}>" in message.content:
-            elapsed = datetime.datetime.utcnow() - start_time
+    # notify when pinging AFK users (but not when the message is from the bot)
+    mentioned_users = {user.id for user in message.mentions}
+    for user_id in list(AFK_USERS.keys()):
+        if user_id in mentioned_users:
+            elapsed = datetime.datetime.utcnow() - AFK_USERS[user_id]
             elapsed_str = str(elapsed).split(".")[0]
             user = await bot.fetch_user(user_id)
             await message.reply(f"💤 {user.mention} is currently AFK — AFK for `{elapsed_str}`.")
+            break  # Prevent multiple duplicate replies
 
     await bot.process_commands(message)
 
@@ -465,5 +468,6 @@ async def on_member_remove(member):
 
 # ===== RUN =====
 bot.run(DICORD_TOKEN)
+
 
 
