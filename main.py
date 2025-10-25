@@ -183,7 +183,7 @@ async def afk(ctx):
     AFK_USERS[user.id] = datetime.datetime.utcnow()
     embed = discord.Embed(
         title="💤 AFK Notice",
-        description=f"{user_tag(user)} is currently AFK.",
+        description=f"{user.mention} is now marked as AFK.",
         color=discord.Color.light_gray()
     )
     await ctx.send(embed=embed)
@@ -197,18 +197,18 @@ async def on_message(message):
     # remove AFK if user talks
     if message.author.id in AFK_USERS:
         del AFK_USERS[message.author.id]
-        await message.channel.send(f"Welcome back, {user_tag(message.author)}! You’re no longer AFK.")
+        await message.channel.send(f"👋 Welcome back, {message.author.mention}! You’re no longer AFK.")
 
     # notify when pinging AFK users
     for user_id, start_time in AFK_USERS.items():
-        if str(user_id) in message.content:
+        # If the AFK user was mentioned in the message
+        if f"<@{user_id}>" in message.content or f"<@!{user_id}>" in message.content:
             elapsed = datetime.datetime.utcnow() - start_time
             elapsed_str = str(elapsed).split(".")[0]
             user = await bot.fetch_user(user_id)
-            await message.reply(f"{user_tag(user)} is currently AFK. Time: {elapsed_str}")
+            await message.reply(f"💤 {user.mention} is currently AFK — AFK for `{elapsed_str}`.")
 
     await bot.process_commands(message)
-
 
 @bot.command()
 async def pet(ctx):
@@ -465,4 +465,5 @@ async def on_member_remove(member):
 
 # ===== RUN =====
 bot.run(DICORD_TOKEN)
+
 
