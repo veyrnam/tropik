@@ -307,7 +307,7 @@ async def verify(ctx, *, args=None):
             "✅ Usage: `t/verify author=<text> title=<text> desc=<text> color=<hex> image=<url> footer=<text> roleid=<id>`"
         )
 
-    # Use regex to handle spaces inside values
+    import re
     pattern = r'(\w+)=(".*?"|\'.*?\'|[^\s]+)'
     matches = re.findall(pattern, args)
     params = {k.lower(): v.strip('"\'') for k, v in matches}
@@ -350,18 +350,24 @@ async def verify(ctx, *, args=None):
             and not user.bot
         )
 
+    remove_role_id = 1394923393748434944
+
     while True:
         try:
             reaction, user = await bot.wait_for("reaction_add", check=check)
             guild = ctx.guild
-            role = guild.get_role(int(role_id))
-            if role:
-                await user.add_roles(role, reason="Verified via ✅ reaction")
+            role_to_add = guild.get_role(int(role_id))
+            role_to_remove = guild.get_role(remove_role_id)
+
+            if role_to_add:
+                await user.add_roles(role_to_add, reason="Verified via ✅ reaction")
+            if role_to_remove:
+                await user.remove_roles(role_to_remove, reason="Removed unverified role")
+
             await msg.remove_reaction("✅", user)
         except Exception as e:
             print(f"[verify cmd] Error: {e}")
             break
-
 
 @bot.command()
 @owner_only()
@@ -459,3 +465,4 @@ async def on_member_remove(member):
 
 # ===== RUN =====
 bot.run(DICORD_TOKEN)
+
